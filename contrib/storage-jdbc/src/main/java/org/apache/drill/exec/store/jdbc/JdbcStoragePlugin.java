@@ -17,16 +17,9 @@
  */
 package org.apache.drill.exec.store.jdbc;
 
-import java.io.IOException;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import javax.sql.DataSource;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.adapter.jdbc.JdbcRules;
@@ -61,9 +54,17 @@ import org.apache.drill.exec.store.SchemaConfig;
 import org.apache.drill.exec.store.jdbc.DrillJdbcRuleBase.DrillJdbcFilterRule;
 import org.apache.drill.exec.store.jdbc.DrillJdbcRuleBase.DrillJdbcProjectRule;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.sql.DataSource;
 
 public class JdbcStoragePlugin extends AbstractStoragePlugin {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(JdbcStoragePlugin.class);
@@ -298,6 +299,21 @@ public class JdbcStoragePlugin extends AbstractStoragePlugin {
           CapitalizingJdbcSchema schema = new CapitalizingJdbcSchema(getSchemaPath(), catalogName, source, dialect,
               convention, catalogName, null);
           schemaMap.put(catalogName, schema);
+
+        }
+      } catch (SQLException e) {
+        logger.warn("Failure while attempting to load JDBC schema.", e);
+      }
+
+      try (Connection con = source.getConnection(); ResultSet set = con.getMetaData().getSchemas()) {
+        while (set.next()) {
+          final String schemaName = set.getString(1);
+          final String catalogName = set.getString(2);
+          CapitalizingJdbcSchema schema = new CapitalizingJdbcSchema(getSchemaPath(), schemaName, source, dialect,
+              convention, catalogName, schemaName);
+          if(catalogName.equals("PUB686"))
+          schemaMap.put(catalogName, schema);
+
         }
       } catch (SQLException e) {
         logger.warn("Failure while attempting to load JDBC schema.", e);
@@ -309,8 +325,12 @@ public class JdbcStoragePlugin extends AbstractStoragePlugin {
             convention,
             null, null));
       }
+      CapitalizingJdbcSchema lastElement = null;
+      for (Iterator collectionItr = schemaMap.values().iterator(); collectionItr.hasNext(); ) {
+        lastElement = (CapitalizingJdbcSchema) collectionItr.next();
+      }
 
-      defaultSchema = schemaMap.values().iterator().next();
+      defaultSchema = lastElement;
 
     }
 
